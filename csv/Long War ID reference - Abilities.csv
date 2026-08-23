@@ -1,0 +1,96 @@
+Name,ID,Enum
+Move,1,eAbility_Move
+Fly,2,eAbility_Fly
+Ascend,3,eAbility_FlyUp
+Descend,4,eAbility_FlyDown
+Launch,5,eAbility_Launch
+Grapple,6,eAbility_Grapple
+Fire,7,eAbility_ShotStandard
+Rapid Fire,8,eAbility_RapidFire
+Stun,9,eAbility_ShotStun
+Drone Hack,10,eAbility_ShotDroneHack
+Overload,11,eAbility_ShotOverload
+Flush,12,eAbility_ShotFlush
+Suppression,13,eAbility_ShotSuppress
+Psychokinetic Strike,14,eAbility_ShotDamageCover
+Flashbang Grenade,15,eAbility_FlashBang
+HE Grenade,16,eAbility_FragGrenade
+Smoke G renade,17,eAbility_SmokeGrenade
+Alien Grenade,18,eAbility_AlienGrenade
+Fire Rocket,19,eAbility_RocketLauncher
+Steady Weapon,20,eAbility_Aim
+Intimidate,21,eAbility_Intimidate
+Overwatch,22,eAbility_Overwatch
+Pyrokinesis,23,eAbility_Torch
+Acid Spit,24,eAbility_Plague
+Stabilize,25,eAbility_Stabilize
+Revive,26,eAbility_Revive
+Hunker Down,27,eAbility_TakeCover
+Ghost,28,eAbility_Ghost
+Heal Wound,29,eAbility_MedikitHeal
+Repair SHIV,30,eAbility_RepairSHIV
+Combat Stim,31,eAbility_CombatStim
+Equip Weapon,32,eAbility_EquipWeapon
+Reload,33,eAbility_Reload
+Mind Merge,34,eAbility_MindMerge
+Psi Lance,35,eAbility_PsiLance
+,36,eAbility_PsiBoltII
+,37,eAbility_PsiBomb
+Greater Mind Merge,38,eAbility_GreaterMindMerge
+Mind Control,39,eAbility_PsiControl
+Psi Panic,40,eAbility_PsiPanic
+Command,41,eAbility_WarCry
+,42,eAbility_Berserk
+Reanimate Ally,43,eAbility_ReanimateAlly
+Reanimate Enemy,44,eAbility_ReanimateEnemy
+Psi Drain,45,eAbility_PsiDrain
+,46,eAbility_PsiBless
+Double Tap,47,eAbility_DoubleTap
+Precision Shot,48,eAbility_PrecisionShot
+Disabling Shot,49,eAbility_DisablingShot
+Squadsight,50,eAbility_SquadSight
+Motion Tracker,51,eAbility_TooCloseForComfort
+Shredder Rocket,52,eAbility_ShredderRocket
+Suppression,53,eAbility_ShotMayhem
+Run and Gun,54,eAbility_RunAndGun
+Bull Rush,55,eAbility_BullRush
+Battle Scanner,56,eAbility_BattleScanner
+Mindfray,57,eAbility_Mindfray
+Rift,58,eAbility_Rift
+Telekinetic Field,59,eAbility_TelekineticField
+Mind Control,60,eAbility_MindControl
+Psi Inspiration,61,eAbility_PsiInspiration
+Close,62,eAbility_CloseCyberdisc
+Death Blossom,63,eAbility_DeathBlossom
+Cannon Fire,64,eAbility_CannonFire
+Cluster Bomb,65,eAbility_ClusterBomb
+Destroy Cover,66,eAbility_DestroyTerrain
+,67,eAbility_PsiInspired
+Repair,68,eAbility_Repair
+,69,eAbility_HeatWave
+Head Down,70,eAbility_CivilianCover
+,71,eAbility_Bloodlust
+Blood Call,72,eAbility_BloodCall
+Concealment,73,eAbility_MimeticSkin
+Adrenal Neurosympathy,74,eAbility_AdrenalNeurosympathy
+Mimic Beacon,75,eAbility_MimicBeacon
+Chem Grenade,76,eAbility_GasGrenade
+Shadow Device,77,eAbility_GhostGrenade
+Shadow Device,78,eAbility_GhostGrenadeStealth
+AP Grenade,79,eAbility_NeedleGrenade
+Flamethrower,80,eAbility_MEC_Flamethrower
+Kinetic Strike,81,eAbility_MEC_KineticStrike
+Launch Proximity Mine,82,eAbility_MEC_ProximityMine
+Jetboot Module,83,eAbility_JetbootModule
+Collateral Damage,84,eAbility_MEC_Barrage
+One For All,85,eAbility_MEC_OneForAll
+Launch Grenade,86,eAbility_MEC_GrenadeLauncher
+Restorative Mist,87,eAbility_MEC_RestorativeMist
+Electropulse,88,eAbility_MEC_ElectroPulse
+Restorative Mist,89,eAbility_MEC_RestorativeMistHealing
+Strangle,90,eAbility_Strangle
+Stealth,91,eAbility_Stealth
+Activate Stealth,92,eAbility_ActivateStealthMP
+Deactivate Stealth,93,eAbility_DeactivateStealthMP
+,94,eAbility_PsiReflect
+,95,eAbility_FlashBangDaze_DEPRECATED
