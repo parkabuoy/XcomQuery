@@ -91,7 +91,7 @@ namespace XcomQuery
     public object? Value { get; set; }
     public List<int>? Elements { get; set; }
     public List<int>? Actors { get; set; }
-    public List<List<XStruct>>? structs { get; set; }
+    public List<List<XStruct>>? Structs { get; set; }
     public string? Struct_name { get; set; }
     public string? Native_data { get; set; }
     public List<Property>? Properties { get; set; }
