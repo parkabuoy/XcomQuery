@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System.Data;
+using XcomQuery;
 
 //----------------------------------------------------------------------------- config
 
@@ -31,40 +32,40 @@ List<Soldier> roster = [];
 
 //----------------------------------------------------------------------------- mapping
 // in parsed json, step through the parts which relate to soldiers
-foreach (CheckpointTable entity in save.checkpoints[0].checkpoint_table.Where(x => x.class_name == "XComStrategyGame.XGStrategySoldier"))
+foreach (CheckpointTable entity in (save.Checkpoints[0].Checkpoint_table ?? []).Where(x => x.Class_name == "XComStrategyGame.XGStrategySoldier"))
 {
-  if (entity.properties is not null)
+  if (entity.Properties is not null)
   {
     // get soldier/character property arrays
     // properties both contain values (name, etc) and lists of more properties
-    Property soldierProp = entity.properties.Where(x => x.name == "m_kSoldier").First();
-    Property charProp = entity.properties.Where(x => x.name == "m_kChar").First();
+    Property soldierProp = entity.Properties.Where(x => x.Name == "m_kSoldier").First();
+    Property charProp = entity.Properties.Where(x => x.Name == "m_kChar").First();
 
-    if (soldierProp.properties is not null)
+    if (soldierProp.Properties is not null)
     {
       // build soldier
       Soldier thisSoldier = new()
       {
-        id = (long)soldierProp.properties.Where(x => x.name == "iID").First().value,
-        perksTaken = [],
-        stats = new(),
+        Id = (long)(soldierProp.Properties.First(x => x.Name == "iID").Value ?? -1),
+        Perks = [],
+        Stats = new(),
         // use helpers to make this a little cleaner
-        lName = StringProp(soldierProp, "strLastName"),
-        nName = StringProp(soldierProp, "strNickName"),
-        fName = StringProp(soldierProp, "strFirstName"),
-        rank = LongProp(soldierProp, "iRank").GetValueOrDefault(),
-        xp = LongProp(soldierProp, "iXP").GetValueOrDefault(),
+        LName = StringProp(soldierProp, "strLastName"),
+        NName = StringProp(soldierProp, "strNickName"),
+        FName = StringProp(soldierProp, "strFirstName"),
+        Rank = LongProp(soldierProp, "iRank").GetValueOrDefault(),
+        Xp = LongProp(soldierProp, "iXP").GetValueOrDefault(),
         // status is in the parent entity
-        status = (entity.properties.First(x => x.name == "m_eStatus").value.ToString() ?? "").TrimStart("eStatus_".ToCharArray())
+        Status = ((entity.Properties.First(x => x.Name == "m_eStatus").Value ?? "").ToString() ?? "").TrimStart("eStatus_".ToCharArray())
       };
 
       // get the perks taken
       // these are stored as an array of integers in aUpgrades, 176 of them (one per perk)
       int[] aUpgrades = [];
-      if (charProp.properties.Any(x => x.name == "aUpgrades"))
+      if ((charProp.Properties ?? []).Any(x => x.Name == "aUpgrades"))
       {
         // get the upgrades array and walk through it
-        aUpgrades = [.. charProp.properties.First(x => x.name == "aUpgrades").int_values];
+        aUpgrades = [.. (charProp.Properties ?? []).First(x => x.Name == "aUpgrades").Int_values ?? []];
         for (int i = 0; i < aUpgrades.Length; i++)
         {
           // if the array value is 1, that perk was picked
@@ -76,7 +77,7 @@ foreach (CheckpointTable entity in save.checkpoints[0].checkpoint_table.Where(x 
             {
               if (Int32.Parse(row["ID"].ToString() ?? "") == i)
               {
-                thisSoldier.perksTaken.Add(new() { id = i, name = row["Name"].ToString() ?? "" });
+                thisSoldier.Perks.Add(new() { Id = i, Name = row["Name"].ToString() ?? "" });
                 break;
               }
             }
@@ -85,27 +86,27 @@ foreach (CheckpointTable entity in save.checkpoints[0].checkpoint_table.Where(x 
       }
 
       int[] aStats = [];
-      if (charProp.properties.Any(x => x.name == "aStats"))
+      if ((charProp.Properties ?? []).Any(x => x.Name == "aStats"))
       {
-        aStats = [.. charProp.properties.First(x => x.name == "aStats").int_values];
-        for (int i = 0; i < aStats.Length; i++)
+        aStats = [.. (charProp.Properties ?? []).First(x => x.Name == "aStats").Int_values ?? []];
+        for (int statIndex = 0; statIndex < aStats.Length; statIndex++)
         {
-          switch (i)
+          switch (statIndex)
           {
             case 0:
-              thisSoldier.stats.HP = aStats[i];
+              thisSoldier.Stats.HP = aStats[statIndex];
               break;
             case 1:
-              thisSoldier.stats.Aim = aStats[i];
+              thisSoldier.Stats.Aim = aStats[statIndex];
               break;
             case 2:
-              thisSoldier.stats.Defense = aStats[i];
+              thisSoldier.Stats.Defense = aStats[statIndex];
               break;
             case 3:
-              thisSoldier.stats.Mobility = aStats[i];
+              thisSoldier.Stats.Mobility = aStats[statIndex];
               break;
             case 7:
-              thisSoldier.stats.Will = aStats[i];
+              thisSoldier.Stats.Will = aStats[statIndex];
               break;
           }
         }
@@ -117,53 +118,74 @@ foreach (CheckpointTable entity in save.checkpoints[0].checkpoint_table.Where(x 
   }
 }
 
-//----------------------------------------------------------------------------- output
-string perkNames = "";
-string indicator = "●";
+// output the results
+OutputTSV();
 
-// build a tab-separated string of all perk names by iterating through perk reference table
-for (int i = 0; i < perkRef.Rows.Count; i++) perkNames += $"\t{perkRef.Rows[i]["Name"]}";
-
-// write header row
-Show($"id\tlName\tnName\trank\tstatus\tMOB\tHP\tDEF\tWILL\tAIM{perkNames}");
-
-// build soldier lines - iterate through roster
-foreach (Soldier thisSoldier in roster.Where(x => x.status != "Dead" && !string.IsNullOrEmpty(x.lName)))
+void OutputTSV()
 {
-  string perkFlags = "";
+  string perkNames = "";
+  string indicator = "●";
 
-  // iterate through perk ref list and set this soldier's flag for each perk
-  for (int i = 0; i < perkRef.Rows.Count; i++)
+  // build a tab-separated string of all perk names by iterating through perk reference table
+  for (int i = 0; i < perkRef.Rows.Count; i++) perkNames += $"\t{perkRef.Rows[i]["Name"]}";
+
+  // write header row
+  Show(string.Join("\t", ["id"
+    ,"lName"
+    ,"nName"
+    ,"rank"
+    ,"status"
+    ,"MOB"
+    ,"HP"
+    ,"DEF"
+    ,"WILL"
+    ,"AIM"
+    ,perkNames[1..]
+  ]));
+
+  // build soldier lines - iterate through roster
+  foreach (Soldier thisSoldier in roster.Where(x => x.Status != "Dead" && !string.IsNullOrEmpty(x.LName)))
   {
-    // add tab for this position regardless
-    perkFlags += "\t";
+    string perkFlags = "";
 
-    // if they have this perk (if any of their perks taken match this perk name), add the indicator string
-    if (thisSoldier.perksTaken.Any(x => x.name == perkRef.Rows[i]["Name"].ToString())) perkFlags += indicator;
+    // iterate through perk ref list and set this soldier's flag for each perk
+    for (int i = 0; i < perkRef.Rows.Count; i++) perkFlags += "\t" + (thisSoldier.Perks.Any(x => x.Name == perkRef.Rows[i]["Name"].ToString()) ? indicator : "");
+
+    // write the line for this soldier
+    Show(string.Join("\t", [
+      thisSoldier.Id
+      ,thisSoldier.LName
+      ,thisSoldier.NName
+      ,thisSoldier.Rank
+      ,thisSoldier.Status
+      ,thisSoldier.Stats.Mobility
+      ,thisSoldier.Stats.HP
+      ,thisSoldier.Stats.Defense
+      ,thisSoldier.Stats.Will
+      ,thisSoldier.Stats.Aim
+      ,perkFlags[1..]
+    ]));
   }
 
-  // write the line for this soldier
-  Show($"{thisSoldier.id}\t{thisSoldier.lName}\t{thisSoldier.nName}\t{thisSoldier.rank}\t{thisSoldier.status}" +
-    $"\t{thisSoldier.stats.Mobility}\t{thisSoldier.stats.HP}\t{thisSoldier.stats.Defense}\t{thisSoldier.stats.Will}\t{thisSoldier.stats.Aim}" +
-    $"{perkFlags}");
+  Console.WriteLine();
+  Console.WriteLine("Save output to " + outputPath + "? y/n");
+  if (Console.ReadKey().KeyChar == 'y') File.WriteAllText(outputPath, outputLedger);
 }
 
-Console.WriteLine();
-Console.WriteLine("Save output to " + outputPath + "? y/n");
-if (Console.ReadKey().KeyChar == 'y') File.WriteAllText(outputPath, outputLedger);
-
-//----------------------------------------------------------------------------- helpers
 string StringProp(Property prop, string name)
 {
-  if (prop.properties.Exists(x => x.name == name))
-    return JsonConvert.DeserializeObject<XValue>(prop.properties.First(x => x.name == name).value.ToString()).str;
-  else return "";
+  foreach (Property stringProp in (prop.Properties ?? []).Where(x => x.Name == name))
+  {
+    return (JsonConvert.DeserializeObject<XValue>((stringProp.Value ?? "").ToString() ?? "") ?? new XValue()).Str ?? "";
+  }
+
+  return "";
 }
 
 long? LongProp(Property prop, string name)
 {
-  if (prop.properties.Exists(x => x.name == name))
-    return (long)prop.properties.Where(x => x.name == name).First().value;
+  if ((prop.Properties ?? []).Exists(x => x.Name == name))
+    return (long)(prop.Properties.First(x => x.Name == name).Value ?? "-1");
   else return null;
 }
 
@@ -178,16 +200,16 @@ void Show(string line)
 static DataTable ConvertCSVtoDataTable(string strFilePath)
 {
   DataTable dt = new();
-  using (StreamReader sr = new StreamReader(strFilePath))
+  using (StreamReader sr = new(strFilePath))
   {
-    string[] headers = sr.ReadLine().Split(',');
+    string[] headers = (sr.ReadLine() ?? "").Split(',');
     foreach (string header in headers)
     {
       dt.Columns.Add(header);
     }
     while (!sr.EndOfStream)
     {
-      string[] rows = sr.ReadLine().Split(',');
+      string[] rows = (sr.ReadLine() ?? "").Split(',');
       DataRow dr = dt.NewRow();
       for (int i = 0; i < headers.Length; i++)
       {
@@ -199,126 +221,3 @@ static DataTable ConvertCSVtoDataTable(string strFilePath)
   return dt;
 }
 
-//----------------------------------------------------------------------------- classes
-public class Soldier
-{
-  public string fName { get; set; }
-  public string nName { get; set; }
-  public string lName { get; set; }
-  public long id { get; set; }
-  public long rank { get; set; }
-  public long xp { get; set; }
-  public string status { get; set; }
-  public List<Perk> perksTaken { get; set; }
-  public SoldierStats stats {get;set;}
-}
-
-public class SoldierStats
-{
-    public long Mobility { get; set; }
-    public long Defense { get; set; }
-    public long Will { get; set; }
-    public long HP { get; set; }
-    public long Aim { get; set; }
-}
-
-public class Perk
-{
-  public long id { get; set; }
-  public string name { get; set; }
-}
-
-public class Checkpoint
-{
-  public int unknown_int1 { get; set; }
-  public string game_type { get; set; }
-  public List<CheckpointTable> checkpoint_table { get; set; }
-  public int unknown_int2 { get; set; }
-  public string class_name { get; set; }
-  public List<string> actor_table { get; set; }
-  public int unknown_int3 { get; set; }
-  public string display_name { get; set; }
-  public string map_name { get; set; }
-  public int unknown_int4 { get; set; }
-}
-
-public class CheckpointTable
-{
-  public string name { get; set; }
-  public string instance_name { get; set; }
-  public string class_name { get; set; }
-  public List<double> vector { get; set; }
-  public List<int> rotator { get; set; }
-  public List<Property> properties { get; set; }
-  public int template_index { get; set; }
-  public int pad_size { get; set; }
-}
-
-public class EnumValue
-{
-  public string value { get; set; }
-  public int number { get; set; }
-}
-
-public class Header
-{
-  public int version { get; set; }
-  public int uncompressed_size { get; set; }
-  public int game_number { get; set; }
-  public int save_number { get; set; }
-  public XValue save_description { get; set; }
-  public XValue time { get; set; }
-  public string map_command { get; set; }
-  public bool tactical_save { get; set; }
-  public bool ironman { get; set; }
-  public bool autosave { get; set; }
-  public string dlc { get; set; }
-  public string language { get; set; }
-}
-
-public class Property
-{
-  public string name { get; set; }
-  public string kind { get; set; }
-  public int actor { get; set; }
-  public object value { get; set; }
-  public List<int> elements { get; set; }
-  public List<int> actors { get; set; }
-  public List<List<XStruct>> structs { get; set; }
-  public string struct_name { get; set; }
-  public string native_data { get; set; }
-  public List<Property> properties { get; set; }
-  public int? data_length { get; set; }
-  public int? array_bound { get; set; }
-  public string data { get; set; }
-  public List<XValue> enum_values { get; set; }
-  public string type { get; set; }
-  public int? number { get; set; }
-  public List<XValue> strings { get; set; }
-  public List<int> int_values { get; set; }
-}
-
-public class JsonRoot
-{
-  public Header header { get; set; }
-  public List<string> actor_table { get; set; }
-  public List<Checkpoint> checkpoints { get; set; }
-}
-
-public class XValue
-{
-  public string str { get; set; }
-  public bool is_wide { get; set; }
-}
-
-public class XStruct
-{
-  public string name { get; set; }
-  public string kind { get; set; }
-  public string struct_name { get; set; }
-  public string native_data { get; set; }
-  public List<Property> properties { get; set; }
-  public List<long> elements { get; set; }
-  public object value { get; set; }
-  public List<List<XStruct>> structs { get; set; }
-}
