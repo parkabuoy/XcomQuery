@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace XcomQuery
 {
-  //----------------------------------------------------------------------------- classes
   public class Soldier
   {
     public required string FName { get; set; }
@@ -33,6 +32,7 @@ namespace XcomQuery
   {
     public long Id { get; set; }
     public string? Name { get; set; }
+    public long Type { get; set; }
   }
 
   public class Checkpoint

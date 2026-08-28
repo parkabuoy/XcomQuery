@@ -1,38 +1,111 @@
 ﻿using Newtonsoft.Json;
 using System.Data;
+using System.Text.RegularExpressions;
+using System.Diagnostics;
 using XcomQuery;
 
-//----------------------------------------------------------------------------- config
-
-// set filename of save, output from xcom2json
-string saveFilename = "save43.json";
+string execTime = $"{DateTime.Now:yyyyMMdd.HHmm.}";
 
 // resulting tab-separated list is saved here
-string outputPath = "..\\..\\..\\txt\\output.txt";
+string outputDir = "..\\..\\..\\txt\\";
+string x2jPath = "..\\..\\..\\exe\\xcom2json.exe";
+string backupDir = "..\\..\\..\\saveBackup\\";
+string saveDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +  "\\Documents\\My Games\\XCOM - Enemy Within\\XComGame\\SaveData";
 
-//----------------------------------------------------------------------------- parsing
+int savesToBackup = 5;
 
-// build datatable out of csv file (directly copied from swf's id reference sheets)
-DataTable perkRef = ConvertCSVtoDataTable("..\\..\\..\\csv\\Long War ID reference - Perks.csv");
+string saveFilenameFull = "";
+string saveFilename = "";
+string jsonFilenameFull = "";
+string saveNameRegex = "^save\\d{1,3}\\Z"; // starts with "save", has 1-3 numbers after it, then ends
+string todayBackupDir = Path.Combine(backupDir, $"{DateTime.Now:yyyyMMdd}");
+string todayOutputDir = Path.Combine(outputDir, $"{DateTime.Now:yyyyMMdd}");
+
+FileInfo? saveForAnalysis = null;
+bool pathIsDir = true;
+
+Console.WriteLine("Save directory:");
+Console.WriteLine(saveDir);
+Console.Write("Use this dir? y/n: ");
+
+// if not 'y', asks for a file/directory
+if (Console.ReadKey().KeyChar != 'y')
+{
+  Console.WriteLine();
+  Console.WriteLine("Input save dir/file:");
+  saveDir = (Console.ReadLine() ?? "").Replace("\"", "");
+  saveForAnalysis = new(saveDir);
+
+  if (!saveForAnalysis.Exists)
+  {
+    Console.WriteLine($"dir/file not found:{Environment.NewLine}{saveForAnalysis}{Environment.NewLine}Press any key to exit...");
+    Console.ReadKey();
+    Environment.Exit(0);
+  }
+
+  pathIsDir = (saveForAnalysis.Attributes & FileAttributes.Directory) == FileAttributes.Directory;
+}
+
+// was pointed to a directory
+if (pathIsDir)
+{
+
+  foreach (FileInfo saveFile in new DirectoryInfo(saveDir)
+    .GetFiles()
+    .Where(x => Regex.IsMatch(x.Name, saveNameRegex))
+    .OrderByDescending(x => x.LastWriteTime)
+    .Take(savesToBackup))
+  {
+    // pluck first one (most recent) for analysis
+    saveForAnalysis ??= saveFile;
+    // back files up
+    if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
+    saveFile.CopyTo(Path.Combine(todayBackupDir, $"{execTime}{saveFile.Name}"), overwrite: true);
+  }
+}
+// was pointed to a file manually
+else
+{
+  saveForAnalysis = new(saveDir);
+  if (saveForAnalysis is null || !saveForAnalysis.Exists) throw new Exception("cry");
+
+  // back file up
+  if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
+  saveForAnalysis.CopyTo(Path.Combine(todayBackupDir, $"{execTime}{saveForAnalysis.Name}"), overwrite: true);
+}
+
+saveFilenameFull = (saveForAnalysis ?? new("")).FullName;
+saveFilename = (saveForAnalysis ?? new("")).Name;
+
+// build full filename of output json
+
+if (!Directory.Exists(todayOutputDir)) Directory.CreateDirectory(todayOutputDir);
+jsonFilenameFull = Path.Combine(todayOutputDir, $"{execTime}{saveFilename}.json");
+
+// run xcom2json exe on save file
+Process.Start("cmd", $"/C {x2jPath} -o \"{jsonFilenameFull}\" \"{saveFilenameFull}\"").WaitForExit();
 
 // parse save json into a class with newtonsoft.jsonconvert
 // classes were generated from parsing various json nodes w/app.quicktype.io
-JsonRoot? save = JsonConvert.DeserializeObject<JsonRoot>(File.ReadAllText($"..\\..\\..\\txt\\{saveFilename}"));
+JsonRoot? saveJson = JsonConvert.DeserializeObject<JsonRoot>(File.ReadAllText(jsonFilenameFull));
 
 // if parsing failed, cry
-if (save is null)
+if (saveJson is null)
 {
-  Console.WriteLine($"json parsing failure{Environment.NewLine}{saveFilename}");
-  Console.Read();
+  Console.WriteLine($"json parsing failure{Environment.NewLine}{saveFilenameFull}{Environment.NewLine}Press any key to exit...");
+  Console.ReadKey();
   Environment.Exit(0);
 }
+
+// build datatable out of csv file (directly copied from swf's id reference sheets)
+DataTable perkRef = ConvertCSVtoDataTable("..\\..\\..\\csv\\Long War ID reference - Perks.csv");
 
 string outputLedger = "";
 List<Soldier> roster = [];
 
 //----------------------------------------------------------------------------- mapping
 // in parsed json, step through the parts which relate to soldiers
-foreach (CheckpointTable entity in (save.Checkpoints[0].Checkpoint_table ?? []).Where(x => x.Class_name == "XComStrategyGame.XGStrategySoldier"))
+foreach (CheckpointTable entity in (saveJson.Checkpoints[0].Checkpoint_table ?? []).Where(x => x.Class_name == "XComStrategyGame.XGStrategySoldier"))
 {
   if (entity.Properties is not null)
   {
@@ -68,16 +141,21 @@ foreach (CheckpointTable entity in (save.Checkpoints[0].Checkpoint_table ?? []).
         aUpgrades = [.. (charProp.Properties ?? []).First(x => x.Name == "aUpgrades").Int_values ?? []];
         for (int i = 0; i < aUpgrades.Length; i++)
         {
-          // if the array value is 1, that perk was picked
-          // if the array value is 2 or 3 that means it's from a medal or something
-          if (aUpgrades[i] == 1)
+          // if the array value is 0, they don't have that perk
+          if (aUpgrades[i] > 0)
           {
             // step through the perk reference sheet until we find the perk which matches this index in the aUpgrades array
             foreach (DataRow row in perkRef.Rows)
             {
               if (Int32.Parse(row["ID"].ToString() ?? "") == i)
               {
-                thisSoldier.Perks.Add(new() { Id = i, Name = row["Name"].ToString() ?? "" });
+                thisSoldier.Perks.Add(new()
+                {
+                  Id = i,
+                  Name = row["Name"].ToString() ?? "",
+                  // 1 is a chosen perk, 2 and 3 are something else apparently. medals?
+                  Type = aUpgrades[i]
+                });
                 break;
               }
             }
@@ -85,9 +163,11 @@ foreach (CheckpointTable entity in (save.Checkpoints[0].Checkpoint_table ?? []).
         }
       }
 
+      // get stats
       int[] aStats = [];
       if ((charProp.Properties ?? []).Any(x => x.Name == "aStats"))
       {
+        // int values stored in an array whose index corresponds to hp, will, etc
         aStats = [.. (charProp.Properties ?? []).First(x => x.Name == "aStats").Int_values ?? []];
         for (int statIndex = 0; statIndex < aStats.Length; statIndex++)
         {
@@ -124,7 +204,6 @@ OutputTSV();
 void OutputTSV()
 {
   string perkNames = "";
-  string indicator = "●";
 
   // build a tab-separated string of all perk names by iterating through perk reference table
   for (int i = 0; i < perkRef.Rows.Count; i++) perkNames += $"\t{perkRef.Rows[i]["Name"]}";
@@ -149,7 +228,11 @@ void OutputTSV()
     string perkFlags = "";
 
     // iterate through perk ref list and set this soldier's flag for each perk
-    for (int i = 0; i < perkRef.Rows.Count; i++) perkFlags += "\t" + (thisSoldier.Perks.Any(x => x.Name == perkRef.Rows[i]["Name"].ToString()) ? indicator : "");
+    for (int i = 0; i < perkRef.Rows.Count; i++)
+    {
+      perkFlags += "\t";
+      foreach (Perk thisPerk in thisSoldier.Perks.Where(x => x.Id == Int64.Parse(perkRef.Rows[i]["ID"].ToString() ?? ""))) perkFlags += thisPerk.Type;
+    }
 
     // write the line for this soldier
     Show(string.Join("\t", [
@@ -167,9 +250,15 @@ void OutputTSV()
     ]));
   }
 
+  string fullOutputPath = Path.Combine(todayOutputDir, $"{execTime}{saveFilename}.tsv");
+
+  File.WriteAllText(fullOutputPath, outputLedger);
+
   Console.WriteLine();
-  Console.WriteLine("Save output to " + outputPath + "? y/n");
-  if (Console.ReadKey().KeyChar == 'y') File.WriteAllText(outputPath, outputLedger);
+  Console.WriteLine($"Output saved to {fullOutputPath}{Environment.NewLine}Press any key to exit...");
+  Console.ReadKey();
+  Environment.Exit(0);
+
 }
 
 string StringProp(Property prop, string name)
@@ -185,7 +274,7 @@ string StringProp(Property prop, string name)
 long? LongProp(Property prop, string name)
 {
   if ((prop.Properties ?? []).Exists(x => x.Name == name))
-    return (long)(prop.Properties.First(x => x.Name == name).Value ?? "-1");
+    return (long)((prop.Properties ?? []).First(x => x.Name == name).Value ?? "-1");
   else return null;
 }
 
