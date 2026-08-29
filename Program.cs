@@ -4,28 +4,30 @@ using System.Text.RegularExpressions;
 using System.Diagnostics;
 using XcomQuery;
 
-string execTime = $"{DateTime.Now:yyyyMMdd.HHmm.}";
+// --------------------------------------------------------------------------------------------------------------------------------------------- DA CONFIG ZONE
+string outputDir = "..\\..\\..\\output\\"; // the output dir
+string backupDir = "..\\..\\..\\saveBackup\\"; // path where saves will be backed up
+string x2jPath = "..\\..\\..\\exe\\xcom2json.exe"; // the path to xcom2json.exe, CRC 
 
-// resulting tab-separated list is saved here
-string outputDir = "..\\..\\..\\output\\";
-string x2jPath = "..\\..\\..\\exe\\xcom2json.exe";
-string backupDir = "..\\..\\..\\saveBackup\\";
-string saveDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +  "\\Documents\\My Games\\XCOM - Enemy Within\\XComGame\\SaveData";
+// your xcom save directory
+string savePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +  "\\Documents\\My Games\\XCOM - Enemy Within\\XComGame\\SaveData";
 
+// how many of the most recent saves will be backed up on running
 int savesToBackup = 5;
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string saveFilenameFull = "";
 string saveFilename = "";
 string jsonFilenameFull = "";
-string saveNameRegex = "^save\\d{1,3}\\Z"; // starts with "save", has 1-3 numbers after it, then ends
+string saveNameRegex = "^save\\d{1,3}\\Z"; // regex: starts with "save", has 1-3 numbers after it, then ends
 string todayBackupDir = Path.Combine(backupDir, $"{DateTime.Now:yyyyMMdd}");
 string todayOutputDir = Path.Combine(outputDir, $"{DateTime.Now:yyyyMMdd}");
 
-FileInfo? saveForAnalysis = null;
-bool pathIsDir = true;
+string execTime = $"{DateTime.Now:yyyyMMdd.HHmm}";
+FileInfo saveForAnalysis = null;
 
 Console.WriteLine("Save directory:");
-Console.WriteLine(saveDir);
+Console.WriteLine(savePath);
 Console.Write("Use this dir? y/n: ");
 
 // if not 'y', asks for a file/directory
@@ -33,50 +35,33 @@ if (Console.ReadKey().KeyChar != 'y')
 {
   Console.WriteLine();
   Console.WriteLine("Input save dir/file:");
-  saveDir = (Console.ReadLine() ?? "").Replace("\"", "");
-  saveForAnalysis = new(saveDir);
-
-  if (!saveForAnalysis.Exists)
-  {
-    Console.WriteLine($"dir/file not found:{Environment.NewLine}{saveForAnalysis}{Environment.NewLine}Press any key to exit...");
-    Console.ReadKey();
-    Environment.Exit(0);
-  }
-
-  pathIsDir = (saveForAnalysis.Attributes & FileAttributes.Directory) == FileAttributes.Directory;
+  savePath = (Console.ReadLine() ?? "").Replace("\"", "");
 }
 
-// was pointed to a directory
-if (pathIsDir)
+if (Directory.Exists(savePath))
 {
-
-  foreach (FileInfo saveFile in new DirectoryInfo(saveDir)
+  foreach (FileInfo saveFile in new DirectoryInfo(savePath)
     .GetFiles()
-    .Where(x => Regex.IsMatch(x.Name, saveNameRegex))
-    .OrderByDescending(x => x.LastWriteTime)
-    .Take(savesToBackup))
+    .Where(x => Regex.IsMatch(x.Name, saveNameRegex)) // match "save[123]" regex
+    .OrderByDescending(x => x.LastWriteTime) // get the most recent files
+    .Take(savesToBackup)) // only a few
   {
-    // pluck first one (most recent) for analysis
-    saveForAnalysis ??= saveFile;
-    // back files up
-    if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
-    saveFile.CopyTo(Path.Combine(todayBackupDir, $"{execTime}{saveFile.Name}"), overwrite: true);
+    saveForAnalysis ??= saveFile; // pluck first one (most recent) for analysis (assign to it if it's null)
+    BackupFile(saveFile); // back files up
   }
 }
-// was pointed to a file manually
+else if (File.Exists(savePath))
+{
+  saveForAnalysis = new(savePath);
+  BackupFile(saveForAnalysis);
+}
 else
 {
-  saveForAnalysis = new(saveDir);
-  if (saveForAnalysis is null || !saveForAnalysis.Exists)
-  {
-    Console.WriteLine($"file not found:{Environment.NewLine}{saveFilenameFull}{Environment.NewLine}Press any key to exit...");
-    Console.ReadKey();
-    Environment.Exit(0);
-  }
-
-  // back file up
-  if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
-  saveForAnalysis.CopyTo(Path.Combine(todayBackupDir, $"{execTime}{saveForAnalysis.Name}"), overwrite: true);
+  Console.WriteLine($"dir/file not found:");
+  Console.WriteLine(savePath);
+  Console.WriteLine("Press any key to exit...");
+  Console.ReadKey();
+  Environment.Exit(0);
 }
 
 saveFilenameFull = (saveForAnalysis ?? new("")).FullName;
@@ -85,22 +70,24 @@ saveFilename = (saveForAnalysis ?? new("")).Name;
 // build full filename of output json
 
 if (!Directory.Exists(todayOutputDir)) Directory.CreateDirectory(todayOutputDir);
-jsonFilenameFull = Path.Combine(todayOutputDir, $"{execTime}{saveFilename}.json");
+jsonFilenameFull = Path.Combine(todayOutputDir, $"{execTime}.{saveFilename}.json");
 
 // run xcom2json exe on save file
 Process.Start("cmd", $"/C {x2jPath} -o \"{jsonFilenameFull}\" \"{saveFilenameFull}\"").WaitForExit();
 
-// parse save json into a class with newtonsoft.jsonconvert
-// classes were generated from parsing various json nodes w/app.quicktype.io
-JsonRoot? saveJson = JsonConvert.DeserializeObject<JsonRoot>(File.ReadAllText(jsonFilenameFull));
-
 // if parsing failed, cry
-if (saveJson is null)
+if (!File.Exists(jsonFilenameFull))
 {
-  Console.WriteLine($"json parsing failure{Environment.NewLine}{saveFilenameFull}{Environment.NewLine}Press any key to exit...");
+  Console.WriteLine($"json parsing failure!");
+  Console.WriteLine(saveFilenameFull);
+  Console.WriteLine("Press any key to exit...");
   Console.ReadKey();
   Environment.Exit(0);
 }
+
+// parse save json into a class with newtonsoft.jsonconvert
+// classes were generated from parsing various json nodes w/app.quicktype.io
+JsonRoot? saveJson = JsonConvert.DeserializeObject<JsonRoot>(File.ReadAllText(jsonFilenameFull));
 
 // build datatable out of csv file (directly copied from swf's id reference sheets)
 DataTable perkRef = ConvertCSVtoDataTable("..\\..\\..\\csv\\Long War ID reference - Perks.csv");
@@ -203,10 +190,25 @@ foreach (CheckpointTable entity in (saveJson.Checkpoints[0].Checkpoint_table ?? 
   }
 }
 
-// output the results
-OutputTSV();
+string fullOutputPath = Path.Combine(todayOutputDir, $"{execTime}.{saveFilename}.tsv");
 
-void OutputTSV()
+// output the results
+OutputTSV(fullOutputPath);
+
+Console.WriteLine();
+Console.WriteLine($"Output saved to: ");
+Console.WriteLine(fullOutputPath);
+Console.WriteLine("Press any key to exit...");
+Console.ReadKey();
+Environment.Exit(0);
+
+// back files up
+void BackupFile(FileInfo saveFile)
+{
+  if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
+  saveFile.CopyTo(Path.Combine(todayBackupDir, $"{execTime}.{saveFile.Name}"), overwrite: true);
+}
+void OutputTSV(string outPath)
 {
   string perkNames = "";
 
@@ -232,7 +234,7 @@ void OutputTSV()
   {
     string perkFlags = "";
 
-    // iterate through perk ref list and set this soldier's flag for each perk
+    // iterate through perk ref list and set this soldier's value for each perk
     for (int i = 0; i < perkRef.Rows.Count; i++)
     {
       perkFlags += "\t";
@@ -255,15 +257,8 @@ void OutputTSV()
     ]));
   }
 
-  string fullOutputPath = Path.Combine(todayOutputDir, $"{execTime}{saveFilename}.tsv");
-
-  File.WriteAllText(fullOutputPath, outputLedger);
-
-  Console.WriteLine();
-  Console.WriteLine($"Output saved to {fullOutputPath}{Environment.NewLine}Press any key to exit...");
-  Console.ReadKey();
-  Environment.Exit(0);
-
+  // write file out
+  File.WriteAllText(outPath, outputLedger);
 }
 
 // deserialize a string property
