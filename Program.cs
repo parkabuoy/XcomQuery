@@ -7,7 +7,7 @@ using XcomQuery;
 string execTime = $"{DateTime.Now:yyyyMMdd.HHmm.}";
 
 // resulting tab-separated list is saved here
-string outputDir = "..\\..\\..\\txt\\";
+string outputDir = "..\\..\\..\\output\\";
 string x2jPath = "..\\..\\..\\exe\\xcom2json.exe";
 string backupDir = "..\\..\\..\\saveBackup\\";
 string saveDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +  "\\Documents\\My Games\\XCOM - Enemy Within\\XComGame\\SaveData";
@@ -67,7 +67,12 @@ if (pathIsDir)
 else
 {
   saveForAnalysis = new(saveDir);
-  if (saveForAnalysis is null || !saveForAnalysis.Exists) throw new Exception("cry");
+  if (saveForAnalysis is null || !saveForAnalysis.Exists)
+  {
+    Console.WriteLine($"file not found:{Environment.NewLine}{saveFilenameFull}{Environment.NewLine}Press any key to exit...");
+    Console.ReadKey();
+    Environment.Exit(0);
+  }
 
   // back file up
   if (!Directory.Exists(todayBackupDir)) Directory.CreateDirectory(todayBackupDir);
@@ -261,6 +266,7 @@ void OutputTSV()
 
 }
 
+// deserialize a string property
 string StringProp(Property prop, string name)
 {
   foreach (Property stringProp in (prop.Properties ?? []).Where(x => x.Name == name))
@@ -271,6 +277,7 @@ string StringProp(Property prop, string name)
   return "";
 }
 
+// deserialize a long property
 long? LongProp(Property prop, string name)
 {
   if ((prop.Properties ?? []).Exists(x => x.Name == name))
