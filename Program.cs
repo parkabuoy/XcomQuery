@@ -3,6 +3,7 @@ using System.Data;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
 using XcomQuery;
+using System.IO.Hashing;
 
 // --------------------------------------------------------------------------------------------------------------------------------------------- DA CONFIG ZONE
 string outputDir = "..\\..\\..\\output\\"; // the output dir
@@ -14,6 +15,7 @@ string savePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfil
 
 // how many of the most recent saves will be backed up on running
 int savesToBackup = 5;
+int x2jHash= 27252167; // ensure the expected x2js version
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string saveFilenameFull = "";
@@ -25,6 +27,17 @@ string todayOutputDir = Path.Combine(outputDir, $"{DateTime.Now:yyyyMMdd}");
 
 string execTime = $"{DateTime.Now:yyyyMMdd.HHmm}";
 FileInfo saveForAnalysis = null;
+
+FileInfo x2jFile = new(x2jPath);
+if (!x2jFile.Exists || x2jFile.GetHashCode() != x2jHash)
+{
+  Console.WriteLine($"invalid xcom2json exe!");
+  Console.WriteLine(x2jFile.FullName);
+  Console.WriteLine("Press any key to exit...");
+  Console.ReadKey();
+  Environment.Exit(0);
+
+}
 
 Console.WriteLine("Save directory:");
 Console.WriteLine(savePath);
@@ -311,4 +324,3 @@ static DataTable ConvertCSVtoDataTable(string strFilePath)
   }
   return dt;
 }
-
